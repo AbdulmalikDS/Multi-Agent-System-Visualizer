@@ -1,0 +1,939 @@
+---
+// Astro page component
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Agent Conversation Network - Astro + LangGraph</title>
+    
+    <!-- Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r160/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <!-- Socket.io CDN -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            cursor: crosshair;
+        }
+
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #canvas {
+            display: block;
+        }
+
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #header {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px 25px;
+            border-radius: 15px;
+            border: 2px solid #00ff88;
+            pointer-events: auto;
+            backdrop-filter: blur(10px);
+        }
+
+        #header h1 {
+            color: #00ff88;
+            font-size: 28px;
+            margin-bottom: 8px;
+            text-shadow: 0 0 15px #00ff88;
+        }
+
+        #header p {
+            color: #888;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        #header .tech-stack {
+            color: #0088ff;
+            font-size: 12px;
+            font-style: italic;
+        }
+
+        #stats {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px 25px;
+            border-radius: 15px;
+            border: 2px solid #0088ff;
+            pointer-events: auto;
+            min-width: 250px;
+            backdrop-filter: blur(10px);
+        }
+
+        #stats h3 {
+            color: #0088ff;
+            margin-bottom: 15px;
+            text-shadow: 0 0 15px #0088ff;
+            font-size: 18px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 14px;
+            padding: 5px 0;
+        }
+
+        .stat-value {
+            color: #00ff88;
+            font-weight: bold;
+            text-shadow: 0 0 5px #00ff88;
+        }
+
+        #conversation-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.95);
+            border: 2px solid #ff0088;
+            border-radius: 15px;
+            padding: 25px;
+            max-height: 350px;
+            overflow-y: auto;
+            pointer-events: auto;
+            display: none;
+            backdrop-filter: blur(10px);
+        }
+
+        #conversation-panel h3 {
+            color: #ff0088;
+            margin-bottom: 20px;
+            text-shadow: 0 0 15px #ff0088;
+            font-size: 20px;
+        }
+
+        .conversation-message {
+            margin-bottom: 15px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            border-left: 4px solid #00ff88;
+            transition: all 0.3s ease;
+        }
+
+        .conversation-message:hover {
+            background: rgba(255, 255, 255, 0.12);
+            transform: translateX(5px);
+        }
+
+        .message-speaker {
+            color: #00ff88;
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+
+        .message-text {
+            color: #fff;
+            line-height: 1.6;
+            font-size: 14px;
+        }
+
+        #agent-info {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.98);
+            border: 3px solid #8800ff;
+            border-radius: 20px;
+            padding: 35px;
+            max-width: 600px;
+            pointer-events: auto;
+            display: none;
+            z-index: 100;
+            backdrop-filter: blur(15px);
+        }
+
+        #agent-info h2 {
+            color: #8800ff;
+            margin-bottom: 25px;
+            text-shadow: 0 0 15px #8800ff;
+            font-size: 24px;
+        }
+
+        .agent-detail {
+            margin-bottom: 20px;
+        }
+
+        .agent-detail label {
+            color: #888;
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .agent-detail span {
+            color: #fff;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .agent-memories {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #333;
+        }
+
+        .memory-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 3px solid #8800ff;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 24px;
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+
+        .close-btn:hover {
+            color: #ff0088;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 1000;
+        }
+
+        #loading h2 {
+            color: #00ff88;
+            margin-bottom: 25px;
+            text-shadow: 0 0 20px #00ff88;
+            font-size: 24px;
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid #333;
+            border-top: 4px solid #00ff88;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .particle {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background: #00ff88;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: float 4s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); opacity: 0.3; }
+            50% { transform: translateY(-30px); opacity: 1; }
+        }
+
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px 25px;
+            border-radius: 15px;
+            border: 2px solid #ffff00;
+            pointer-events: auto;
+            max-width: 350px;
+            backdrop-filter: blur(10px);
+        }
+
+        #instructions h4 {
+            color: #ffff00;
+            margin-bottom: 15px;
+            text-shadow: 0 0 15px #ffff00;
+            font-size: 18px;
+        }
+
+        #instructions ul {
+            list-style: none;
+            font-size: 13px;
+            color: #888;
+        }
+
+        #instructions li {
+            margin-bottom: 8px;
+            padding-left: 15px;
+            position: relative;
+        }
+
+        #instructions li:before {
+            content: '•';
+            color: #ffff00;
+            position: absolute;
+            left: 0;
+        }
+
+        #debug-panel {
+            position: absolute;
+            top: 50%;
+            left: 20px;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
+            border-radius: 15px;
+            border: 2px solid #ff8800;
+            pointer-events: auto;
+            max-width: 300px;
+            max-height: 400px;
+            overflow-y: auto;
+            display: none;
+            backdrop-filter: blur(10px);
+        }
+
+        #debug-panel h4 {
+            color: #ff8800;
+            margin-bottom: 15px;
+            text-shadow: 0 0 15px #ff8800;
+        }
+
+        .debug-log {
+            font-size: 11px;
+            color: #ccc;
+            margin-bottom: 5px;
+            word-wrap: break-word;
+        }
+
+        .debug-error {
+            color: #ff4444;
+        }
+
+        .debug-success {
+            color: #44ff44;
+        }
+
+        #toggle-debug {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #ff8800;
+            color: #ff8800;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            pointer-events: auto;
+            font-size: 12px;
+            transition: all 0.3s ease;
+        }
+
+        #toggle-debug:hover {
+            background: rgba(255, 136, 0, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <canvas id="canvas"></canvas>
+        
+        <div id="ui">
+            <div id="header">
+                <h1>Multi-Agent Network</h1>
+                <p>AI Agents in Real-time 3D Space</p>
+                <p class="tech-stack">Powered by Astro + LangGraph + Three.js</p>
+            </div>
+            
+            <div id="stats">
+                <h3>Network Stats</h3>
+                <div class="stat-item">
+                    <span>Active Agents:</span>
+                    <span class="stat-value" id="agent-count">0</span>
+                </div>
+                <div class="stat-item">
+                    <span>Conversations:</span>
+                    <span class="stat-value" id="conversation-count">0</span>
+                </div>
+                <div class="stat-item">
+                    <span>FPS:</span>
+                    <span class="stat-value" id="fps">0</span>
+                </div>
+                <div class="stat-item">
+                    <span>Connection:</span>
+                    <span class="stat-value" id="connection-status">Connecting...</span>
+                </div>
+                <div class="stat-item">
+                    <span>Memory Usage:</span>
+                    <span class="stat-value" id="memory-usage">0 MB</span>
+                </div>
+            </div>
+            
+            <div id="conversation-panel">
+                <h3>Live Conversations</h3>
+                <div id="conversation-messages"></div>
+            </div>
+            
+            <div id="agent-info">
+                <button class="close-btn" onclick="closeAgentInfo()">×</button>
+                <h2 id="agent-name">Agent Name</h2>
+                <div class="agent-detail">
+                    <label>Personality:</label>
+                    <span id="agent-personality">-</span>
+                </div>
+                <div class="agent-detail">
+                    <label>Topics:</label>
+                    <span id="agent-topics">-</span>
+                </div>
+                <div class="agent-detail">
+                    <label>Status:</label>
+                    <span id="agent-status">-</span>
+                </div>
+                <div class="agent-detail">
+                    <label>Conversations:</label>
+                    <span id="agent-conversations">-</span>
+                </div>
+                <div class="agent-detail">
+                    <label>Messages:</label>
+                    <span id="agent-messages">-</span>
+                </div>
+                <div class="agent-memories">
+                    <label>Recent Memories:</label>
+                    <div id="agent-memories-list"></div>
+                </div>
+            </div>
+            
+            <div id="instructions">
+                <h4>Controls</h4>
+                <ul>
+                    <li>Click agents to see details</li>
+                    <li>Mouse drag to rotate view</li>
+                    <li>Scroll to zoom</li>
+                    <li>Watch conversations flow</li>
+                    <li>Real-time LangGraph agents</li>
+                </ul>
+            </div>
+
+            <button id="toggle-debug" onclick="toggleDebugPanel()">Toggle Debug</button>
+            
+            <div id="debug-panel">
+                <h4>Debug Console</h4>
+                <div id="debug-logs"></div>
+            </div>
+        </div>
+        
+        <div id="loading">
+            <h2>Initializing AI Network...</h2>
+            <div class="spinner"></div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let scene, camera, renderer, controls;
+        let agents = new Map();
+        let connections = [];
+        let particles = [];
+        let socket;
+        let animationId;
+        let frameCount = 0;
+        let lastTime = performance.now();
+        let fps = 0;
+        let debugMode = false;
+
+        // Debug logging
+        function debugLog(message, type = 'info') {
+            if (!debugMode) return;
+            
+            const debugLogs = document.getElementById('debug-logs');
+            const logEntry = document.createElement('div');
+            logEntry.className = `debug-log debug-${type}`;
+            logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            debugLogs.appendChild(logEntry);
+            debugLogs.scrollTop = debugLogs.scrollHeight;
+        }
+
+        function toggleDebugPanel() {
+            debugMode = !debugMode;
+            const debugPanel = document.getElementById('debug-panel');
+            debugPanel.style.display = debugMode ? 'block' : 'none';
+            debugLog('Debug panel toggled', 'success');
+        }
+
+        // Initialize the application
+        function init() {
+            debugLog('Initializing application...', 'info');
+            initThreeJS();
+            initSocket();
+            createParticles();
+            animate();
+            debugLog('Application initialized successfully', 'success');
+        }
+
+        // Initialize Three.js
+        function initThreeJS() {
+            debugLog('Setting up Three.js scene...', 'info');
+            
+            // Scene
+            scene = new THREE.Scene();
+            scene.fog = new THREE.Fog(0x000000, 10, 50);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 15);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ 
+                canvas: document.getElementById('canvas'),
+                antialias: true,
+                alpha: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x000000, 1);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            // Controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxDistance = 50;
+            controls.minDistance = 5;
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.3);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 10, 5);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+
+            // Add ambient particles
+            for (let i = 0; i < 150; i++) {
+                const particle = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.02, 8, 8),
+                    new THREE.MeshBasicMaterial({ 
+                        color: 0x00ff88,
+                        transparent: true,
+                        opacity: Math.random() * 0.5
+                    })
+                );
+                particle.position.set(
+                    (Math.random() - 0.5) * 40,
+                    (Math.random() - 0.5) * 40,
+                    (Math.random() - 0.5) * 40
+                );
+                scene.add(particle);
+                particles.push(particle);
+            }
+
+            // Handle window resize
+            window.addEventListener('resize', onWindowResize);
+            debugLog('Three.js scene setup complete', 'success');
+        }
+
+        // Initialize WebSocket connection
+        function initSocket() {
+            debugLog('Connecting to WebSocket server...', 'info');
+            socket = io();
+
+            socket.on('connect', () => {
+                document.getElementById('connection-status').textContent = 'Connected';
+                document.getElementById('connection-status').style.color = '#00ff88';
+                document.getElementById('loading').style.display = 'none';
+                debugLog('WebSocket connected successfully', 'success');
+            });
+
+            socket.on('disconnect', () => {
+                document.getElementById('connection-status').textContent = 'Disconnected';
+                document.getElementById('connection-status').style.color = '#ff0088';
+                debugLog('WebSocket disconnected', 'error');
+            });
+
+            socket.on('agentsData', (agentsData) => {
+                debugLog(`Received ${agentsData.length} agents data`, 'info');
+                createAgents(agentsData);
+                updateStats();
+            });
+
+            socket.on('conversationsData', (conversationsData) => {
+                debugLog(`Received ${conversationsData.length} conversations`, 'info');
+                updateConversations(conversationsData);
+                updateStats();
+            });
+
+            socket.on('conversationUpdate', (data) => {
+                debugLog(`Conversation update: ${data.type}`, 'info');
+                updateConversationMessages(data);
+            });
+
+            socket.on('agentDetails', (agentData) => {
+                debugLog(`Agent details received for ${agentData.name}`, 'info');
+                showAgentInfo(agentData);
+            });
+
+            socket.on('systemUpdate', (data) => {
+                debugLog('System update received', 'info');
+                updateStats();
+            });
+
+            socket.on('error', (error) => {
+                debugLog(`WebSocket error: ${error.message}`, 'error');
+            });
+        }
+
+        // Create 3D agent representations
+        function createAgents(agentsData) {
+            debugLog('Creating 3D agent representations...', 'info');
+            
+            // Clear existing agents
+            agents.forEach(agent => {
+                scene.remove(agent.mesh);
+                scene.remove(agent.glow);
+            });
+            agents.clear();
+
+            // Create new agents
+            agentsData.forEach(agentData => {
+                const agent = createAgent(agentData);
+                agents.set(agentData.id, agent);
+            });
+
+            // Create connections
+            createConnections();
+            debugLog(`Created ${agentsData.length} agents`, 'success');
+        }
+
+        // Create individual agent
+        function createAgent(agentData) {
+            // Main sphere
+            const geometry = new THREE.SphereGeometry(0.5, 32, 32);
+            const material = new THREE.MeshPhongMaterial({ 
+                color: agentData.color,
+                emissive: agentData.color,
+                emissiveIntensity: 0.2,
+                transparent: true,
+                opacity: 0.9
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(
+                (agentData.id - 3) * 2, 
+                Math.sin(agentData.id) * 1.5, 
+                Math.cos(agentData.id) * 1.5
+            );
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+
+            // Glow effect
+            const glowGeometry = new THREE.SphereGeometry(0.7, 32, 32);
+            const glowMaterial = new THREE.MeshBasicMaterial({
+                color: agentData.color,
+                transparent: true,
+                opacity: 0.3
+            });
+            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+            glow.position.copy(mesh.position);
+
+            // Add to scene
+            scene.add(mesh);
+            scene.add(glow);
+
+            // Add click handler
+            mesh.userData = { agentId: agentData.id, agentData: agentData };
+
+            return {
+                mesh: mesh,
+                glow: glow,
+                data: agentData,
+                originalPosition: { ...mesh.position }
+            };
+        }
+
+        // Create connections between agents
+        function createConnections() {
+            // Clear existing connections
+            connections.forEach(connection => {
+                scene.remove(connection);
+            });
+            connections = [];
+
+            // Create new connections (simple network)
+            const agentIds = Array.from(agents.keys());
+            for (let i = 0; i < agentIds.length; i++) {
+                for (let j = i + 1; j < agentIds.length; j++) {
+                    const agent1 = agents.get(agentIds[i]);
+                    const agent2 = agents.get(agentIds[j]);
+                    
+                    if (agent1 && agent2) {
+                        const connection = createConnection(agent1.mesh.position, agent2.mesh.position);
+                        connections.push(connection);
+                    }
+                }
+            }
+        }
+
+        // Create connection line
+        function createConnection(pos1, pos2) {
+            const geometry = new THREE.BufferGeometry().setFromPoints([pos1, pos2]);
+            const material = new THREE.LineBasicMaterial({ 
+                color: 0x00ff88,
+                transparent: true,
+                opacity: 0.3
+            });
+            const line = new THREE.Line(geometry, material);
+            scene.add(line);
+            return line;
+        }
+
+        // Create ambient particles
+        function createParticles() {
+            for (let i = 0; i < 80; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 4 + 's';
+                document.getElementById('ui').appendChild(particle);
+            }
+        }
+
+        // Animation loop
+        function animate() {
+            animationId = requestAnimationFrame(animate);
+
+            // Update controls
+            controls.update();
+
+            // Animate agents
+            agents.forEach(agent => {
+                // Gentle floating animation
+                const time = Date.now() * 0.001;
+                agent.mesh.position.y = agent.originalPosition.y + Math.sin(time + agent.data.id) * 0.3;
+                agent.glow.position.copy(agent.mesh.position);
+
+                // Rotate agents slowly
+                agent.mesh.rotation.y += 0.015;
+                agent.glow.rotation.y += 0.015;
+            });
+
+            // Animate particles
+            particles.forEach((particle, index) => {
+                particle.position.y += Math.sin(Date.now() * 0.001 + index) * 0.015;
+                particle.rotation.y += 0.015;
+            });
+
+            // Animate connections
+            connections.forEach((connection, index) => {
+                const time = Date.now() * 0.001;
+                connection.material.opacity = 0.2 + Math.sin(time + index) * 0.15;
+            });
+
+            // Calculate FPS
+            frameCount++;
+            const currentTime = performance.now();
+            if (currentTime - lastTime >= 1000) {
+                fps = Math.round((frameCount * 1000) / (currentTime - lastTime));
+                document.getElementById('fps').textContent = fps;
+                frameCount = 0;
+                lastTime = currentTime;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Handle window resize
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Update statistics
+        function updateStats() {
+            document.getElementById('agent-count').textContent = agents.size;
+            document.getElementById('conversation-count').textContent = 
+                document.querySelectorAll('.conversation-message').length;
+            
+            // Update memory usage
+            if (performance.memory) {
+                const memoryMB = Math.round(performance.memory.usedJSHeapSize / 1024 / 1024);
+                document.getElementById('memory-usage').textContent = `${memoryMB} MB`;
+            }
+        }
+
+        // Update conversations display
+        function updateConversations(conversationsData) {
+            const container = document.getElementById('conversation-messages');
+            container.innerHTML = '';
+
+            conversationsData.forEach(conversation => {
+                const conversationDiv = document.createElement('div');
+                conversationDiv.className = 'conversation-message';
+                
+                const topicDiv = document.createElement('div');
+                topicDiv.className = 'message-speaker';
+                topicDiv.textContent = `Topic: ${conversation.topic}`;
+                conversationDiv.appendChild(topicDiv);
+
+                conversation.messages.forEach(message => {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = 'conversation-message';
+                    
+                    const speakerDiv = document.createElement('div');
+                    speakerDiv.className = 'message-speaker';
+                    speakerDiv.textContent = message.speaker_name;
+                    messageDiv.appendChild(speakerDiv);
+                    
+                    const textDiv = document.createElement('div');
+                    textDiv.className = 'message-text';
+                    textDiv.textContent = message.message;
+                    messageDiv.appendChild(textDiv);
+                    
+                    conversationDiv.appendChild(messageDiv);
+                });
+
+                container.appendChild(conversationDiv);
+            });
+
+            // Show conversation panel if there are conversations
+            if (conversationsData.length > 0) {
+                document.getElementById('conversation-panel').style.display = 'block';
+            }
+        }
+
+        // Update conversation messages
+        function updateConversationMessages(data) {
+            const container = document.getElementById('conversation-messages');
+            
+            data.messages.forEach(message => {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'conversation-message';
+                
+                const speakerDiv = document.createElement('div');
+                speakerDiv.className = 'message-speaker';
+                speakerDiv.textContent = message.speaker_name;
+                messageDiv.appendChild(speakerDiv);
+                
+                const textDiv = document.createElement('div');
+                textDiv.className = 'message-text';
+                textDiv.textContent = message.message;
+                messageDiv.appendChild(textDiv);
+                
+                container.appendChild(messageDiv);
+                
+                // Scroll to bottom
+                container.scrollTop = container.scrollHeight;
+            });
+        }
+
+        // Show agent information
+        function showAgentInfo(agentData) {
+            document.getElementById('agent-name').textContent = agentData.name;
+            document.getElementById('agent-personality').textContent = agentData.personality.style;
+            document.getElementById('agent-topics').textContent = agentData.personality.topics.join(', ');
+            document.getElementById('agent-status').textContent = 'Active';
+            document.getElementById('agent-conversations').textContent = agentData.stats.conversation_count;
+            document.getElementById('agent-messages').textContent = agentData.stats.message_count;
+            
+            // Display memories
+            const memoriesList = document.getElementById('agent-memories-list');
+            memoriesList.innerHTML = '';
+            
+            if (agentData.memories && agentData.memories.length > 0) {
+                agentData.memories.slice(0, 5).forEach(memory => {
+                    const memoryDiv = document.createElement('div');
+                    memoryDiv.className = 'memory-item';
+                    memoryDiv.textContent = memory.content;
+                    memoriesList.appendChild(memoryDiv);
+                });
+            } else {
+                const noMemoriesDiv = document.createElement('div');
+                noMemoriesDiv.textContent = 'No recent memories';
+                noMemoriesDiv.style.color = '#666';
+                memoriesList.appendChild(noMemoriesDiv);
+            }
+            
+            document.getElementById('agent-info').style.display = 'block';
+        }
+
+        // Close agent information
+        function closeAgentInfo() {
+            document.getElementById('agent-info').style.display = 'none';
+        }
+
+        // Handle mouse clicks
+        function onMouseClick(event) {
+            const mouse = new THREE.Vector2();
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mouse, camera);
+
+            const intersects = raycaster.intersectObjects(scene.children);
+
+            for (let intersection of intersects) {
+                if (intersection.object.userData && intersection.object.userData.agentId !== undefined) {
+                    debugLog(`Agent clicked: ${intersection.object.userData.agentId}`, 'info');
+                    socket.emit('agentClick', intersection.object.userData.agentId);
+                    break;
+                }
+            }
+        }
+
+        // Event listeners
+        document.addEventListener('click', onMouseClick);
+
+        // Initialize the application
+        init();
+    </script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+{
+  "name": "multi-agent-astro",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Multi-Agent Conversation Network powered by Express, Socket.io, and Three.js",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "build": "echo 'No build step needed for Express server'",
+    "preview": "node server.js",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@langchain/community": "^0.3.53",
+    "@langchain/langgraph": "^0.0.20",
+    "@langchain/openai": "^0.0.20",
+    "astro": "^4.0.0",
+    "better-sqlite3": "^9.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.18.2",
+    "node-fetch": "^3.3.2",
+    "socket.io": "^4.7.2",
+    "openai": "latest",
+    "@azure/identity": "latest"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.9"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "conversation",
+    "3d",
+    "visualization",
+    "threejs",
+    "websocket",
+    "azure-openai",
+    "langgraph",
+    "express",
+    "sqlite"
+  ],
+  "author": "AI Assistant",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
