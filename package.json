@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@langchain/community": "^0.3.53",
+    "@langchain/core": "^0.3.0",
     "@langchain/langgraph": "^0.0.20",
     "@langchain/openai": "^0.0.20",
     "astro": "^4.0.0",
@@ -22,10 +23,12 @@
     "node-fetch": "^3.3.2",
     "socket.io": "^4.7.2",
     "openai": "latest",
-    "@azure/identity": "latest"
+    "@azure/identity": "latest",
+    "@azure/core-sse": "^2.1.1"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.9"
+    "@types/better-sqlite3": "^7.6.9",
+    "@types/node": "^20.0.0"
   },
   "keywords": [
     "ai",

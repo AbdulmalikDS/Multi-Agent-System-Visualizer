@@ -33,8 +33,8 @@ export interface ConversationState {
 const llm = new ChatOpenAI({
     azureOpenAIApiKey: process.env.AZURE_API_KEY,
     azureOpenAIApiVersion: process.env.AZURE_API_VERSION,
-    azureOpenAIApiDeploymentName: 'gpt-4.1',
-    azureOpenAIApiInstanceName: 'autonomousagent',
+    azureOpenAIApiDeploymentName: 'gpt-4.1-nano',
+    azureOpenAIBasePath: 'https://scrag-resource.cognitiveservices.azure.com/openai/v1/',
     temperature: 0.8,
     maxTokens: 150,
 });
