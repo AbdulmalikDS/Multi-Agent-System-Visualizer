@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { mkdirSync, existsSync } from 'fs';
 import dotenv from 'dotenv';
 import Database from 'better-sqlite3';
 import fetch from 'node-fetch';
@@ -21,7 +22,13 @@ const io = new Server(server);
 // Serve static files
 app.use(express.static(join(__dirname, 'public')));
 
-// Database setup
+// Database setup - ensure directory exists
+// Create data directory if it doesn't exist
+if (!existsSync('./data')) {
+    mkdirSync('./data', { recursive: true });
+    console.log('📁 Created data directory');
+}
+
 const db = new Database('./data/agents.db');
 
 // Azure OpenAI Configuration
