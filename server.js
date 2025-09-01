@@ -488,7 +488,7 @@ class LeadResearcher {
         try {
             // Phase 1: Initial Perplexity search and embedding generation
             console.log(`🔍 [LeadResearcher] Phase 1: Initial research and embedding generation`);
-            const initialSearch = await searchWithPerplexity(topic);
+            const initialSearch = await searchWithPerplexityOrDemo(topic);
             
             // Add embedding to global space
             this.addEmbeddingToSpace(sessionId, initialSearch.embedding, {
@@ -621,7 +621,7 @@ Topic: ${topic}`;
         console.log(`🤖 [LeadResearcher] Running subagent ${subagent.name} with query: ${searchQuery}`);
         
         // Perform specialized search
-        const searchResults = await searchWithPerplexity(searchQuery);
+        const searchResults = await searchWithPerplexityOrDemo(searchQuery);
         
         // Add embedding to space
         this.addEmbeddingToSpace(sessionId, searchResults.embedding, {
@@ -1121,761 +1121,192 @@ Make it academically rigorous and well-organized.`;
     }
 }
 
-class ResearchSubagent {
-    constructor(config, memory, db) {
-        this.config = config;
-        this.memory = memory;
-        this.db = db;
-        this.name = config.name;
-        this.expertise = config.expertise;
-        this.personality = config.personality;
-        this.color = config.color;
-        this.tools = ['perplexity_search', 'memory_access', 'analysis_tools'];
-    }
-    
-    async performResearch(searchQuery, searchResults) {
-        console.log(`🤖 [${this.name}] Performing ${this.expertise} research on: ${searchQuery}`);
-        
-        try {
-            // Analyze search results with specialized focus
-            const systemMessage = `You are ${this.name}, a specialized research agent with expertise in ${this.expertise}. 
-            Your personality is ${this.personality}. 
-            
-            Analyze the provided search results and provide detailed, insightful research findings based on your expertise.
-            Focus specifically on ${this.getSpecializedFocus()}.
-            
-            Provide structured analysis with:
-            1. Key findings specific to your expertise
-            2. Critical insights and patterns
-            3. Implications and significance
-            4. Connections to related concepts
-            5. Areas requiring further investigation`;
-            
-            const prompt = this.buildSpecializedPrompt(searchQuery, searchResults);
-            
-            const aiResponse = await callAzureOpenAI(prompt, systemMessage);
-            console.log(`🤖 [${this.name}] Analysis completed: ${aiResponse.substring(0, 100)}...`);
-            
-            return [{
-                agentId: this.config.id,
-                agentName: this.name,
-                content: aiResponse,
-                source: `${this.expertise}_specialized_analysis`,
-                confidence: 0.85 + Math.random() * 0.1,
-                searchResults: searchResults,
-                expertise: this.expertise,
-                timestamp: new Date().toISOString()
-            }];
-            
-        } catch (error) {
-            console.error(`❌ [${this.name}] Research error:`, error);
-            return this.generateFallbackFindings(searchQuery);
-        }
-    }
-    
-    getSpecializedFocus() {
-        const focuses = {
-            'background_research': 'historical context, foundational concepts, key developments, and evolution of the field',
-            'trend_analysis': 'current trends, emerging patterns, market dynamics, and future projections',
-            'technical_analysis': 'technical specifications, methodologies, implementation details, and architectural considerations',
-            'impact_assessment': 'societal impact, economic implications, risks, benefits, and strategic considerations'
-        };
-        
-        return focuses[this.expertise] || 'comprehensive analysis and evaluation';
-    }
-    
-    buildSpecializedPrompt(searchQuery, searchResults) {
-        // Ensure sources and links are arrays
-        const sources = Array.isArray(searchResults.sources) ? searchResults.sources : 
-                       typeof searchResults.sources === 'string' ? [searchResults.sources] : 
-                       ['Research Database'];
-        const links = Array.isArray(searchResults.links) ? searchResults.links : [];
-        
-        const basePrompt = `Research Query: ${searchQuery}
+// Demo mode configuration with rate limiting
+const IS_DEMO_MODE = !AZURE_API_KEY || !PERPLEXITY_API_KEY;
+const RATE_LIMIT_PER_IP = 10; // Max 10 searches per IP per hour
+const RATE_LIMIT_GLOBAL = 100; // Max 100 searches globally per hour
 
-Search Results:
-${searchResults.results}
+// Rate limiting storage
+const ipSearchCounts = new Map();
+let globalSearchCount = 0;
+let lastGlobalReset = Date.now();
 
-Available Sources:
-${sources.slice(0, 5).join('\n')}
+console.log('🎮 Demo Mode:', IS_DEMO_MODE ? 'ENABLED (No API keys)' : 'DISABLED (API keys configured)');
+console.log('🛡️ Rate Limiting:', IS_DEMO_MODE ? 'DISABLED' : 'ENABLED');
 
-Links Found:
-${links.slice(0, 3).join('\n')}`;
+// Demo search results for when APIs are not configured
+function generateDemoSearchResults(topic) {
+    return {
+        results: `This is a demo response for "${topic}". In production, this would be powered by Perplexity API with real search results, citations, and sources. The system includes Azure OpenAI for intelligent agent orchestration and analysis.
 
-        const specializedInstructions = {
-            'background_research': `
-            Focus on:
-            - Historical development and timeline
-            - Foundational theories and concepts
-            - Key researchers and contributions
-            - Evolution of understanding
-            - Current state compared to origins`,
-            
-            'trend_analysis': `
-            Focus on:
-            - Current market trends and adoption rates
-            - Emerging technologies and approaches
-            - Growth patterns and projections
-            - Competitive landscape
-            - Future outlook and predictions`,
-            
-            'technical_analysis': `
-            Focus on:
-            - Technical architectures and frameworks
-            - Implementation methodologies
-            - Performance metrics and benchmarks
-            - Technical challenges and solutions
-            - Best practices and standards`,
-            
-            'impact_assessment': `
-            Focus on:
-            - Societal and economic impact
-            - Benefits and potential risks
-            - Stakeholder implications
-            - Policy and regulatory considerations
-            - Long-term consequences and opportunities`
-        };
-        
-        return basePrompt + (specializedInstructions[this.expertise] || '');
-    }
-    
-    generateFallbackFindings(searchQuery) {
-        const fallbackContent = {
-            'background_research': `Background analysis of ${searchQuery}: This field has established foundations with key developments over recent years. Historical context shows evolution from early concepts to current applications.`,
-            'trend_analysis': `Trend analysis for ${searchQuery}: Current market shows growing adoption with emerging patterns indicating significant future potential. Key trends include increased integration and technological advancement.`,
-            'technical_analysis': `Technical analysis of ${searchQuery}: System architecture reveals robust frameworks with scalable implementations. Technical considerations include performance optimization and integration capabilities.`,
-            'impact_assessment': `Impact assessment for ${searchQuery}: Analysis reveals significant positive implications across multiple sectors. Strategic considerations include adoption benefits and implementation challenges.`
-        };
-        
-        return [{
-            agentId: this.config.id,
-            agentName: this.name,
-            content: fallbackContent[this.expertise] || `Analysis of ${searchQuery} from ${this.expertise} perspective.`,
-            source: `${this.expertise}_fallback_analysis`,
-            confidence: 0.6,
-            searchResults: null,
-            expertise: this.expertise,
-            timestamp: new Date().toISOString()
-        }];
-    }
+Key Demo Features:
+• Real-time 3D visualization of multi-agent interactions
+• Dynamic embedding space visualization  
+• Intelligent connection flows between specialized agents
+• Export system for research results
+
+To enable real API integration, configure your API keys in env.local file.`,
+        sources: [
+            "Demo Source 1: Academic Research Database",
+            "Demo Source 2: Scientific Publications",
+            "Demo Source 3: Industry Reports",
+            "Demo Source 4: Technical Documentation"
+        ],
+        links: [
+            "https://example.com/research-paper-1",
+            "https://example.com/academic-source-2", 
+            "https://example.com/industry-report-3"
+        ],
+        embedding: generateEmbedding(topic, "demo search results")
+    };
 }
 
-class CitationAgent {
-    constructor(db) {
-        this.db = db;
-    }
-    
-    async processFindings(sessionId, findings) {
-        console.log(`📚 CitationAgent processing ${findings.length} findings`);
-        
-        const citations = [];
-        
-        for (const finding of findings) {
-            // Simulate citation generation
-            const citation = {
-                findingId: finding.agentId,
-                sourceUrl: `https://research.example.com/${sessionId}/${finding.agentId}`,
-                sourceTitle: `Research on ${finding.content.substring(0, 30)}...`,
-                citationText: `${this.generateCitationText(finding)}`
-            };
-            
-            citations.push(citation);
+function generateDemoAgentAnalysis(topic, searchResults) {
+    const demoAnalyses = [
+        {
+            agentName: 'Technical Analyst',
+            expertise: 'technical_analysis',
+            analysis: `Technical analysis for "${topic}": This demo shows how the Technical Analyst would provide detailed technical insights, implementation considerations, and systems analysis based on the research query.`,
+            confidence: 0.85
+        },
+        {
+            agentName: 'Trend Researcher', 
+            expertise: 'trend_analysis',
+            analysis: `Trend research for "${topic}": This demo demonstrates how the Trend Researcher would identify patterns, emerging developments, and future projections related to the query.`,
+            confidence: 0.82
+        },
+        {
+            agentName: 'Impact Assessor',
+            expertise: 'impact_assessment', 
+            analysis: `Impact assessment for "${topic}": This demo shows how the Impact Assessor would evaluate societal, economic, and strategic implications of the research topic.`,
+            confidence: 0.88
         }
-        
-        return citations;
-    }
+    ];
     
-    generateCitationText(finding) {
-        const sources = [
-            'Journal of Advanced Research',
-            'International Conference on AI',
-            'Computational Intelligence Review',
-            'Digital Systems Analysis',
-            'Modern Technology Studies'
-        ];
-        
-        const randomSource = sources[Math.floor(Math.random() * sources.length)];
-        const year = 2020 + Math.floor(Math.random() * 5);
-        
-        return `${randomSource}, ${year}. "${finding.content.substring(0, 50)}..."`;
-    }
+    return demoAnalyses;
 }
 
-// Initialize the multi-agent research system
-const memory = new Memory();
-const leadResearcher = new LeadResearcher(memory, db);
+// Enhanced search function with rate limiting and demo fallback
+async function searchWithPerplexityOrDemo(query, clientIP = 'unknown') {
+    // Always use demo mode for public deployment safety
+    if (IS_DEMO_MODE || process.env.NODE_ENV === 'production') {
+        console.log('🎮 Using demo search results for:', query);
+        // Add delay to simulate API call
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        return generateDemoSearchResults(query);
+    }
+    
+    // Rate limiting for development mode only
+    if (!checkRateLimit(clientIP)) {
+        console.log('⚠️ Rate limit exceeded for IP:', clientIP);
+        return generateDemoSearchResults(query);
+    }
+    
+    return searchWithPerplexity(query);
+}
 
-// Make io globally accessible for embedding updates
-global.io = io;
+// Rate limiting function
+function checkRateLimit(clientIP) {
+    const now = Date.now();
+    const hourInMs = 60 * 60 * 1000;
+    
+    // Reset global counter every hour
+    if (now - lastGlobalReset > hourInMs) {
+        globalSearchCount = 0;
+        lastGlobalReset = now;
+        ipSearchCounts.clear();
+    }
+    
+    // Check global limit
+    if (globalSearchCount >= RATE_LIMIT_GLOBAL) {
+        return false;
+    }
+    
+    // Check IP limit
+    const ipCount = ipSearchCounts.get(clientIP) || 0;
+    if (ipCount >= RATE_LIMIT_PER_IP) {
+        return false;
+    }
+    
+    // Increment counters
+    globalSearchCount++;
+    ipSearchCounts.set(clientIP, ipCount + 1);
+    
+    return true;
+}
 
-// WebSocket event handlers
+// Enhanced AI function with demo fallback  
+async function callAzureOpenAIOrDemo(prompt) {
+    if (IS_DEMO_MODE) {
+        console.log('🎮 Using demo AI response');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return `Demo AI Response: This would be an intelligent response from Azure OpenAI GPT-4.1-nano based on the prompt. In demo mode, this shows the system architecture without requiring API keys.`;
+    }
+    
+    return callAzureOpenAI(prompt);
+}
+
+// Socket.io connection handling
 io.on('connection', (socket) => {
-    console.log(`🔬 Research client connected: ${socket.id}`);
+    console.log(`🔬 New research client connected: ${socket.id}`);
     
-    // Send initial agent data and embedding space
-    try {
-        const agentsStmt = db.prepare('SELECT * FROM agents ORDER BY id');
-        const agentsData = agentsStmt.all();
-        
-        // Convert to format expected by client
-        const formattedAgents = agentsData.map(agent => {
-            let colorValue;
-            try {
-                colorValue = parseInt(agent.color.replace('#', '0x'), 16);
-            } catch (error) {
-                console.warn(`Failed to convert color ${agent.color} for agent ${agent.name}, using default`);
-                colorValue = 0x00ff88;
-            }
-            
-            return {
-                id: agent.id,
-                name: agent.name,
-                expertise: agent.personality_type,
-                color: colorValue
-            };
-        });
-        
-        socket.emit('agentsData', formattedAgents);
-        
-        // Send current embedding space
-        const embeddingSpace = leadResearcher.getEmbeddingSpace();
-        socket.emit('embeddingSpace', embeddingSpace);
-        
-        console.log(`📊 Sent ${formattedAgents.length} agents and ${embeddingSpace.length} embeddings to client`);
-    } catch (error) {
-        console.error('Error fetching initial data:', error);
-        socket.emit('agentsData', []);
-        socket.emit('embeddingSpace', []);
-    }
+    // Send demo mode status to client
+    socket.emit('demoModeStatus', IS_DEMO_MODE);
     
-    // Handle enhanced user research request
-    socket.on('userResearchRequest', async (data) => {
-        const { topic, useGPTOrchestration, usePerplexitySearch } = data;
-        
-        console.log(`🔬 User research request: "${topic}"`);
-        console.log(`🤖 GPT Orchestration: ${useGPTOrchestration ? 'ENABLED' : 'DISABLED'}`);
-        console.log(`🔍 Perplexity Search: ${usePerplexitySearch ? 'ENABLED' : 'DISABLED'}`);
-        
-        try {
-            // Clear previous session before creating new one
-            currentResearchSession = null;
-            
-            let searchResults = null;
-            let agentAnalysis = [];
-            
-            // Step 1: Use Perplexity for search if enabled
-            if (usePerplexitySearch) {
-                console.log(`🔍 Using Perplexity API for search: ${topic}`);
-                searchResults = await searchWithPerplexity(topic);
-                console.log(`✅ Perplexity search completed`);
-                
-                // Generate embedding from search results
-                if (searchResults && searchResults.embedding) {
-                    const embeddingData = {
-                        id: `perplexity_${Date.now()}`,
-                        x: searchResults.embedding.x,
-                        y: searchResults.embedding.y,
-                        z: searchResults.embedding.z,
-                        metadata: {
-                            type: 'perplexity_search',
-                            query: topic,
-                            timestamp: Date.now()
-                        },
-                        weight: searchResults.embedding.weight || 0.5
-                    };
-                    
-                    // Add to embedding space and broadcast
-                    leadResearcher.addEmbedding(embeddingData);
-                    io.emit('newEmbedding', embeddingData);
-                }
-            } else {
-                searchResults = generateFallbackSearchResults(topic);
-            }
-            
-            // Step 2: Use GPT for agent orchestration if enabled
-            if (useGPTOrchestration && searchResults) {
-                console.log(`🤖 Using GPT-4.1-nano for agent orchestration`);
-                
-                const orchestrationPrompt = `You are the lead researcher orchestrating a team of AI agents to analyze the topic: "${topic}".
-
-Search results available:
-${searchResults.results}
-
-Available specialist agents:
-1. Technical Analyst - Focuses on technical aspects, implementation details, and systems
-2. Trend Researcher - Analyzes current trends, patterns, and future projections  
-3. Impact Assessor - Evaluates societal, economic, and strategic implications
-4. Context Synthesizer - Creates connections and synthesizes information across domains
-5. Evidence Validator - Validates sources, checks accuracy, and assesses reliability
-
-Based on the search results, orchestrate these agents to provide comprehensive analysis. For each agent, provide:
-1. Specific focus area for this topic
-2. Key questions they should investigate
-3. Analysis priority (high/medium/low)
-4. Expected insights they should deliver
-
-Format your response as a structured plan for agent coordination.`;
-
-                try {
-                    const orchestrationPlan = await callAzureOpenAI(orchestrationPrompt);
-                    console.log(`✅ GPT orchestration plan created: ${orchestrationPlan.substring(0, 100)}...`);
-                    
-                    // Generate agent analyses based on GPT orchestration
-                    const agentConfigs = [
-                        { name: 'Technical Analyst', expertise: 'technical_analysis', color: '#00ff88' },
-                        { name: 'Trend Researcher', expertise: 'trend_analysis', color: '#ff8800' },
-                        { name: 'Impact Assessor', expertise: 'impact_assessment', color: '#ff0088' },
-                        { name: 'Context Synthesizer', expertise: 'context_synthesis', color: '#8800ff' },
-                        { name: 'Evidence Validator', expertise: 'evidence_validation', color: '#0088ff' }
-                    ];
-                    
-                    for (const config of agentConfigs) {
-                        const agentPrompt = `You are ${config.name}, a specialist in ${config.expertise}.
-
-Research Topic: ${topic}
-
-Search Results:
-${searchResults.results}
-
-Orchestration Plan:
-${orchestrationPlan}
-
-Based on your expertise in ${config.expertise}, provide detailed analysis focusing on your specialized area. Include:
-1. Key findings relevant to your expertise
-2. Critical insights and patterns you identify
-3. Implications and significance of your findings
-4. Recommendations for further investigation
-
-Provide structured, detailed analysis based on your specialization.`;
-
-                        try {
-                            const agentResponse = await callAzureOpenAI(agentPrompt);
-                            
-                            agentAnalysis.push({
-                                agentName: config.name,
-                                expertise: config.expertise,
-                                analysis: agentResponse,
-                                confidence: 0.8 + Math.random() * 0.15,
-                                timestamp: new Date().toISOString()
-                            });
-                            
-                            // Generate embedding for agent analysis
-                            const agentEmbedding = generateEmbedding(`${config.name} analysis of ${topic}`, agentResponse);
-                            const embeddingData = {
-                                id: `agent_${config.name.toLowerCase().replace(' ', '_')}_${Date.now()}`,
-                                x: agentEmbedding.x,
-                                y: agentEmbedding.y,
-                                z: agentEmbedding.z,
-                                metadata: {
-                                    type: 'agent_analysis',
-                                    agentName: config.name,
-                                    query: topic,
-                                    timestamp: Date.now()
-                                },
-                                weight: agentEmbedding.weight || 0.7
-                            };
-                            
-                            // Add to lead researcher and broadcast
-                            leadResearcher.addEmbedding(embeddingData);
-                            io.emit('newEmbedding', embeddingData);
-                            
-                        } catch (agentError) {
-                            console.error(`❌ Error with ${config.name}:`, agentError.message);
-                        }
-                    }
-                    
-                } catch (orchestrationError) {
-                    console.error('❌ GPT orchestration error:', orchestrationError.message);
-                    agentAnalysis = generateFallbackAgentAnalysis(topic, searchResults);
-                }
-            } else {
-                agentAnalysis = generateFallbackAgentAnalysis(topic, searchResults);
-            }
-            
-            // Create research session
-            const sessionData = {
-                sessionId: `session_${Date.now()}`,
-                topic: topic,
-                searchResults: searchResults,
-                agentAnalysis: agentAnalysis,
-                status: 'completed',
-                useGPTOrchestration: useGPTOrchestration,
-                usePerplexitySearch: usePerplexitySearch,
-                timestamp: new Date().toISOString()
-            };
-            
-            currentResearchSession = sessionData;
-            
-            // Send research update to client with detailed data for export
-            socket.emit('researchUpdate', {
-                type: 'completed',
-                sessionId: sessionData.sessionId,
-                topic: topic,
-                searchResults: searchResults,
-                agentAnalysis: agentAnalysis,
-                embeddingCount: leadResearcher.getEmbeddingSpace().length,
-                useGPTOrchestration: useGPTOrchestration,
-                usePerplexitySearch: usePerplexitySearch
-            });
-
-            // Send detailed Perplexity results for export
-            if (usePerplexitySearch && searchResults) {
-                socket.emit('researchUpdate', {
-                    type: 'perplexity_result',
-                    query: topic,
-                    results: searchResults.results,
-                    sources: searchResults.sources || [],
-                    links: searchResults.links || [],
-                    timestamp: Date.now()
-                });
-            }
-
-            // Send agent analysis results for export
-            if (agentAnalysis && agentAnalysis.length > 0) {
-                agentAnalysis.forEach((analysis, index) => {
-                    socket.emit('researchUpdate', {
-                        type: 'agent_analysis',
-                        agent: analysis.agentName,
-                        analysis: analysis.analysis,
-                        insights: analysis.insights || [],
-                        confidence: analysis.confidence,
-                        timestamp: Date.now()
-                    });
-                });
-            }
-
-            // Send final summary
-            socket.emit('researchUpdate', {
-                type: 'final_summary',
-                summary: `Research completed for "${topic}". Found ${searchResults?.sources?.length || 0} sources with ${agentAnalysis.length} agent analyses. Key insights: ${agentAnalysis.map(a => a.analysis?.substring(0, 100)).join('; ')}...`
-            });
-            
-            console.log(`✅ Research session completed: ${sessionData.sessionId}`);
-            
-        } catch (error) {
-            console.error('❌ Error in research session:', error);
-            socket.emit('researchUpdate', {
-                type: 'error',
-                message: `Research session failed: ${error.message}`
-            });
-        }
+    // Handle demo mode check
+    socket.on('checkDemoMode', () => {
+        socket.emit('demoModeStatus', IS_DEMO_MODE);
     });
     
-    // Add fallback function for agent analysis
-    function generateFallbackAgentAnalysis(topic, searchResults) {
-        return [
-            {
-                agentName: 'Technical Analyst',
-                expertise: 'technical_analysis',
-                analysis: `Technical analysis of ${topic}: Current implementations show promising approaches with room for optimization. Key technical considerations include scalability, performance, and integration challenges.`,
-                confidence: 0.75,
-                timestamp: new Date().toISOString()
-            },
-            {
-                agentName: 'Trend Researcher',
-                expertise: 'trend_analysis',
-                analysis: `Trend analysis for ${topic}: Emerging patterns indicate growing adoption and continued evolution. Market indicators suggest sustained interest and development momentum.`,
-                confidence: 0.72,
-                timestamp: new Date().toISOString()
-            },
-            {
-                agentName: 'Impact Assessor',
-                expertise: 'impact_assessment',
-                analysis: `Impact assessment of ${topic}: Significant implications across multiple domains with both opportunities and challenges. Societal and economic effects require careful consideration.`,
-                confidence: 0.78,
-                timestamp: new Date().toISOString()
-            }
-        ];
-    }
-    
-    // Handle embedding space requests
-    socket.on('getEmbeddingSpace', () => {
-        const embeddingSpace = leadResearcher.getEmbeddingSpace();
-        socket.emit('embeddingSpace', embeddingSpace);
-        console.log(`📊 Sent embedding space with ${embeddingSpace.length} points`);
-    });
-    
-    // Handle clear embedding space
-    socket.on('clearEmbeddingSpace', () => {
-        leadResearcher.globalEmbeddings.clear();
-        io.emit('embeddingSpace', []);
-        console.log('🧹 Cleared embedding space');
-    });
-    
-    // Enhanced agent click handler with research data
-    socket.on('agentClick', (agentId) => {
-        console.log(`🔍 Enhanced agent clicked: ${agentId}`);
-        
-        try {
-            const agentStmt = db.prepare('SELECT * FROM agents WHERE id = ?');
-            const agent = agentStmt.get(agentId);
-            
-            if (agent) {
-                // Get recent research activities for this agent
-                const messageStmt = db.prepare(`
-                    SELECT 
-                        m.id,
-                        m.message,
-                        m.timestamp,
-                        m.message_type,
-                        a.name as speaker_name,
-                        a.color as speaker_color
-                    FROM messages m 
-                    JOIN agents a ON m.speaker_id = a.id 
-                    WHERE m.speaker_id = ? 
-                    ORDER BY m.timestamp DESC 
-                    LIMIT 15
-                `);
-                
-                const messages = messageStmt.all(agentId);
-                
-                // Get agent-specific embeddings
-                const agentEmbeddings = leadResearcher.getEmbeddingSpace()
-                    .filter(emb => emb.metadata?.agentName && 
-                                   emb.metadata.agentName.toLowerCase().includes(agent.name.toLowerCase()));
-                
-                const formattedMessages = messages.map(msg => ({
-                    id: msg.id,
-                    message: msg.message,
-                    timestamp: msg.timestamp,
-                    message_type: msg.message_type,
-                    speaker_name: msg.speaker_name,
-                    speaker_color: msg.speaker_color
-                }));
-                
-                socket.emit('enhancedAgentData', {
-                    agentId: agentId,
-                    agentName: agent.name,
-                    expertise: agent.personality_type,
-                    messages: formattedMessages,
-                    embeddings: agentEmbeddings,
-                    totalCount: messages.length,
-                    embeddingCount: agentEmbeddings.length,
-                    lastUpdated: new Date().toISOString()
-                });
-                
-                console.log(`📨 Sent enhanced data for agent ${agent.name}: ${messages.length} messages, ${agentEmbeddings.length} embeddings`);
-                
-            }
-        } catch (error) {
-            console.error('Error in enhanced agent click handler:', error);
-            socket.emit('enhancedAgentData', {
-                agentId: agentId,
-                error: 'Failed to fetch agent data'
-            });
-        }
-    });
-    
-    // Handle legacy events for backwards compatibility
+    // Handle research requests with rate limiting
     socket.on('startResearch', async (data) => {
         const topic = typeof data === 'string' ? data : data.query || data.topic;
-        const usePerplexitySearch = data.usePerplexitySearch !== undefined ? data.usePerplexitySearch : true;
-        const useGPTOrchestration = data.useGPTOrchestration !== undefined ? data.useGPTOrchestration : true;
+        const clientIP = socket.handshake.address || 'unknown';
         
-        console.log(`🔬 StartResearch request: "${topic}"`);
-        console.log(`🤖 GPT Orchestration: ${useGPTOrchestration ? 'ENABLED' : 'DISABLED'}`);
-        console.log(`🔍 Perplexity Search: ${usePerplexitySearch ? 'ENABLED' : 'DISABLED'}`);
+        console.log(`🔍 Research request from ${clientIP}: "${topic}"`);
         
         try {
-            // Clear previous session before creating new one
-            currentResearchSession = null;
+            // Use demo search (safe for production)
+            const searchResults = await searchWithPerplexityOrDemo(topic, clientIP);
             
-            let searchResults = null;
-            let agentAnalysis = [];
-            
-            // Step 1: Use Perplexity for search if enabled
-            if (usePerplexitySearch) {
-                console.log(`🔍 Using Perplexity API for search: ${topic}`);
-                searchResults = await searchWithPerplexity(topic);
-                console.log(`✅ Perplexity search completed`);
-                
-                // Send Perplexity results immediately
-                if (searchResults) {
-                    socket.emit('researchUpdate', {
-                        type: 'perplexity_result',
-                        query: topic,
-                        results: searchResults.results,
-                        sources: searchResults.sources || [],
-                        links: searchResults.links || [],
-                        timestamp: Date.now()
-                    });
-                }
-                
-                // Generate embedding from search results
-                if (searchResults && searchResults.embedding) {
-                    const embeddingData = {
-                        id: `perplexity_${Date.now()}`,
-                        x: searchResults.embedding.x,
-                        y: searchResults.embedding.y,
-                        z: searchResults.embedding.z,
-                        metadata: {
-                            type: 'perplexity_search',
-                            query: topic,
-                            timestamp: Date.now()
-                        },
-                        weight: searchResults.embedding.weight || 0.5
-                    };
-                    
-                    // Add to embedding space and broadcast
-                    leadResearcher.addEmbedding(embeddingData);
-                    io.emit('newEmbedding', embeddingData);
-                }
-            } else {
-                searchResults = generateFallbackSearchResults(topic);
-            }
-            
-            // Step 2: Use GPT for agent orchestration if enabled
-            if (useGPTOrchestration && searchResults) {
-                console.log(`🤖 Using GPT-4.1-nano for agent orchestration`);
-                
-                const orchestrationPrompt = `You are the lead researcher orchestrating a team of AI agents to analyze the topic: "${topic}".
-
-Search results available:
-${searchResults.results}
-
-Available specialist agents:
-1. Technical Analyst - Focuses on technical aspects, implementation details, and systems
-2. Trend Researcher - Analyzes current trends, patterns, and future projections  
-3. Impact Assessor - Evaluates societal, economic, and strategic implications
-4. Context Synthesizer - Creates connections and synthesizes information across domains
-5. Evidence Validator - Validates sources, checks accuracy, and assesses reliability
-
-Based on the search results, orchestrate these agents to provide comprehensive analysis. For each agent, provide:
-1. Specific focus area for this topic
-2. Key questions they should investigate
-3. Analysis priority (high/medium/low)
-4. Expected insights they should deliver
-
-Format your response as a structured plan for agent coordination.`;
-
-                try {
-                    const orchestrationPlan = await callAzureOpenAI(orchestrationPrompt);
-                    console.log(`✅ GPT orchestration plan created: ${orchestrationPlan.substring(0, 100)}...`);
-                    
-                    // Generate agent analyses based on GPT orchestration
-                    const agentConfigs = [
-                        { name: 'Technical Analyst', expertise: 'technical_analysis', color: '#00ff88' },
-                        { name: 'Trend Researcher', expertise: 'trend_analysis', color: '#ff8800' },
-                        { name: 'Impact Assessor', expertise: 'impact_assessment', color: '#ff0088' },
-                        { name: 'Context Synthesizer', expertise: 'context_synthesis', color: '#8800ff' },
-                        { name: 'Evidence Validator', expertise: 'evidence_validation', color: '#0088ff' }
-                    ];
-                    
-                    for (const config of agentConfigs) {
-                        const agentPrompt = `You are ${config.name}, a specialist in ${config.expertise}.
-
-Research Topic: ${topic}
-
-Search Results:
-${searchResults.results}
-
-Orchestration Plan:
-${orchestrationPlan}
-
-Based on your expertise in ${config.expertise}, provide detailed analysis focusing on your specialized area. Include:
-1. Key findings relevant to your expertise
-2. Critical insights and patterns you identify
-3. Implications and significance of your findings
-4. Recommendations for further investigation
-
-Provide structured, detailed analysis based on your specialization.`;
-
-                        try {
-                            const agentResponse = await callAzureOpenAI(agentPrompt);
-                            
-                            const analysisData = {
-                                agentName: config.name,
-                                expertise: config.expertise,
-                                analysis: agentResponse,
-                                confidence: 0.8 + Math.random() * 0.15,
-                                timestamp: new Date().toISOString()
-                            };
-                            
-                            agentAnalysis.push(analysisData);
-                            
-                            // Send agent analysis immediately
-                            socket.emit('researchUpdate', {
-                                type: 'agent_analysis',
-                                agent: analysisData.agentName,
-                                analysis: analysisData.analysis,
-                                insights: analysisData.insights || [],
-                                confidence: analysisData.confidence,
-                                timestamp: Date.now()
-                            });
-                            
-                            // Generate embedding for agent analysis
-                            const agentEmbedding = generateEmbedding(`${config.name} analysis of ${topic}`, agentResponse);
-                            const embeddingData = {
-                                id: `agent_${config.name.toLowerCase().replace(' ', '_')}_${Date.now()}`,
-                                x: agentEmbedding.x,
-                                y: agentEmbedding.y,
-                                z: agentEmbedding.z,
-                                metadata: {
-                                    type: 'agent_analysis',
-                                    agentName: config.name,
-                                    query: topic,
-                                    timestamp: Date.now()
-                                },
-                                weight: agentEmbedding.weight || 0.7
-                            };
-                            
-                            // Add to lead researcher and broadcast
-                            leadResearcher.addEmbedding(embeddingData);
-                            io.emit('newEmbedding', embeddingData);
-                            
-                        } catch (agentError) {
-                            console.error(`❌ Error with ${config.name}:`, agentError.message);
-                        }
-                    }
-                    
-                } catch (orchestrationError) {
-                    console.error('❌ GPT orchestration error:', orchestrationError.message);
-                    agentAnalysis = generateFallbackAgentAnalysis(topic, searchResults);
-                }
-            } else {
-                agentAnalysis = generateFallbackAgentAnalysis(topic, searchResults);
-            }
-            
-            // Create research session
-            const sessionData = {
-                sessionId: `session_${Date.now()}`,
-                topic: topic,
-                searchResults: searchResults,
-                agentAnalysis: agentAnalysis,
-                status: 'completed',
-                useGPTOrchestration: useGPTOrchestration,
-                usePerplexitySearch: usePerplexitySearch,
-                timestamp: new Date().toISOString()
-            };
-            
-            currentResearchSession = sessionData;
-            
-            // Send final summary
+            // Send search results
             socket.emit('researchUpdate', {
-                type: 'final_summary',
-                summary: `Research completed for "${topic}". Found ${searchResults?.sources?.length || 0} sources with ${agentAnalysis.length} agent analyses. Key insights: ${agentAnalysis.map(a => a.analysis?.substring(0, 100)).join('; ')}...`,
+                type: 'perplexity_result',
+                query: topic,
+                results: searchResults.results,
+                sources: searchResults.sources || [],
+                links: searchResults.links || [],
                 timestamp: Date.now()
             });
-
-            // Send completion signal
+            
+            // Generate demo agent analysis
+            const agentAnalysis = generateDemoAgentAnalysis(topic, searchResults);
+            
+            // Send agent analyses
+            agentAnalysis.forEach(analysis => {
+                socket.emit('researchUpdate', {
+                    type: 'agent_analysis',
+                    agent: analysis.agentName,
+                    analysis: analysis.analysis,
+                    confidence: analysis.confidence,
+                    timestamp: Date.now()
+                });
+            });
+            
+            // Send completion
             socket.emit('researchUpdate', {
                 type: 'completed',
-                sessionId: sessionData.sessionId,
                 topic: topic,
                 searchResults: searchResults,
                 agentAnalysis: agentAnalysis,
-                embeddingCount: leadResearcher.getEmbeddingSpace().length,
-                useGPTOrchestration: useGPTOrchestration,
-                usePerplexitySearch: usePerplexitySearch
+                timestamp: Date.now()
             });
-
-            console.log(`✅ Research completed for "${topic}"`);
             
         } catch (error) {
-            console.error('❌ Research error:', error.message);
+            console.error('❌ Research error:', error);
             socket.emit('researchUpdate', {
                 type: 'error',
-                message: error.message
+                message: 'Research request failed. Please try again.'
             });
         }
     });
@@ -1885,44 +1316,13 @@ Provide structured, detailed analysis based on your specialization.`;
     });
 });
 
-// Auto-research disabled - only manual searches allowed
-// setInterval(async () => {
-//     const researchTopics = [
-//         'AI Ethics and Bias Detection',
-//         'Climate Change Impact Analysis',
-//         'Climate Change Impact Analysis',
-//         'Healthcare AI Applications',
-//         'Cybersecurity Threat Intelligence',
-//         'Quantum Computing Research',
-//         'Sustainable Energy Solutions',
-//         'Digital Privacy and Security',
-//         'Space Exploration Technologies'
-//     ];
-//     
-//     const randomTopic = researchTopics[Math.floor(Math.random() * researchTopics.length)];
-//     console.log(`🔄 Auto-starting research on: ${randomTopic}`);
-//     
-//     try {
-//         await leadResearcher.startResearch(randomTopic);
-//     } catch (error) {
-//         console.error('Auto-research error:', error);
-//     }
-// }, 45000); // Every 45 seconds
-
 // Start server
 const PORT = process.env.PORT || 4321;
 server.listen(PORT, () => {
-    console.log(`🔬 Research Multi-Agent System running on port ${PORT}`);
+    console.log(`🔬 Multi-Agent Research System running on port ${PORT}`);
     console.log(`🌐 Open http://localhost:${PORT} in your browser`);
-    console.log(`🤖 Research Multi-Agent Framework: ACTIVE`);
-    console.log(`🧠 Vector Memory System: ENABLED`);
-    console.log(`🤖 Azure OpenAI Integration: ${azureOpenAIClient ? 'ENABLED' : 'DISABLED'}`);
-    console.log(`📊 WebSocket: Active with Socket.io`);
-    console.log(`🔬 Research Agents: 5 specialized research agents`);
-    console.log(`🧠 Vector Memory: Real-time memory visualization`);
-    console.log(`� Manual Search: Ready for user queries`);
-    if (azureOpenAIClient) {
-        console.log(`🤖 Azure OpenAI Model: ${AZURE_DEPLOYMENT}`);
-        console.log(`🌐 Azure OpenAI Endpoint: ${AZURE_ENDPOINT}`);
-    }
+    console.log(`🎮 Demo Mode: ${IS_DEMO_MODE ? 'ENABLED (Safe for public deployment)' : 'DISABLED'}`);
+    console.log(`🛡️ Rate Limiting: ${IS_DEMO_MODE ? 'DISABLED (Demo mode)' : 'ENABLED'}`);
+    console.log(`🤖 Azure OpenAI: ${AZURE_API_KEY ? 'CONFIGURED' : 'NOT CONFIGURED (Demo responses)'}`);
+    console.log(`🔍 Perplexity API: ${PERPLEXITY_API_KEY ? 'CONFIGURED' : 'NOT CONFIGURED (Demo responses)'}`);
 });
