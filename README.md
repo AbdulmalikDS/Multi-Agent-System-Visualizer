@@ -21,7 +21,10 @@ A sophisticated 3D visualization platform for multi-agent research systems with 
 2. **Configure APIs**:
    ```bash
    cp .env.template env.local
-   # Edit env.local with your API keys
+   # Edit env.local with your API keys:
+   # - AZURE_API_KEY: Your Azure OpenAI key
+   # - AZURE_ENDPOINT: Your Azure endpoint
+   # - PERPLEXITY_API_KEY: Your Perplexity API key
    ```
 
 3. **Start the server**:
@@ -87,7 +90,13 @@ npm run dev
 ## Export Format
 
 Research results can be exported as structured data including:
-- Search results and sources
-- Agent analysis and insights
-- Academic citations
-- Visualization statistics
+- **Search Results**: Real-time Perplexity API search results
+- **Agent Analysis**: Specialized AI analysis from multiple perspectives  
+- **Academic Citations**: Validated sources and references
+- **Visualization Statistics**: 3D interaction and embedding metrics
+
+## Notes
+
+- **Security**: Never commit your `env.local` file - it contains sensitive API keys
+- **Languages**: Astro framework included for GitHub language diversity
+- **Performance**: Optimized for real-time 3D rendering and WebSocket communication
