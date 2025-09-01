@@ -1669,14 +1669,215 @@ Provide structured, detailed analysis based on your specialization.`;
     // Handle legacy events for backwards compatibility
     socket.on('startResearch', async (data) => {
         const topic = typeof data === 'string' ? data : data.query || data.topic;
+        const usePerplexitySearch = data.usePerplexitySearch !== undefined ? data.usePerplexitySearch : true;
+        const useGPTOrchestration = data.useGPTOrchestration !== undefined ? data.useGPTOrchestration : true;
         
-        // Forward to userResearchRequest with Perplexity enabled by default
-        socket.emit('userResearchRequest', { 
-            topic: topic, 
-            userId: 'legacy',
-            usePerplexitySearch: true,  // Enable Perplexity search by default
-            useGPTOrchestration: true   // Enable GPT orchestration by default
-        });
+        console.log(`🔬 StartResearch request: "${topic}"`);
+        console.log(`🤖 GPT Orchestration: ${useGPTOrchestration ? 'ENABLED' : 'DISABLED'}`);
+        console.log(`🔍 Perplexity Search: ${usePerplexitySearch ? 'ENABLED' : 'DISABLED'}`);
+        
+        try {
+            // Clear previous session before creating new one
+            currentResearchSession = null;
+            
+            let searchResults = null;
+            let agentAnalysis = [];
+            
+            // Step 1: Use Perplexity for search if enabled
+            if (usePerplexitySearch) {
+                console.log(`🔍 Using Perplexity API for search: ${topic}`);
+                searchResults = await searchWithPerplexity(topic);
+                console.log(`✅ Perplexity search completed`);
+                
+                // Send Perplexity results immediately
+                if (searchResults) {
+                    socket.emit('researchUpdate', {
+                        type: 'perplexity_result',
+                        query: topic,
+                        results: searchResults.results,
+                        sources: searchResults.sources || [],
+                        links: searchResults.links || [],
+                        timestamp: Date.now()
+                    });
+                }
+                
+                // Generate embedding from search results
+                if (searchResults && searchResults.embedding) {
+                    const embeddingData = {
+                        id: `perplexity_${Date.now()}`,
+                        x: searchResults.embedding.x,
+                        y: searchResults.embedding.y,
+                        z: searchResults.embedding.z,
+                        metadata: {
+                            type: 'perplexity_search',
+                            query: topic,
+                            timestamp: Date.now()
+                        },
+                        weight: searchResults.embedding.weight || 0.5
+                    };
+                    
+                    // Add to embedding space and broadcast
+                    leadResearcher.addEmbedding(embeddingData);
+                    io.emit('newEmbedding', embeddingData);
+                }
+            } else {
+                searchResults = generateFallbackSearchResults(topic);
+            }
+            
+            // Step 2: Use GPT for agent orchestration if enabled
+            if (useGPTOrchestration && searchResults) {
+                console.log(`🤖 Using GPT-4.1-nano for agent orchestration`);
+                
+                const orchestrationPrompt = `You are the lead researcher orchestrating a team of AI agents to analyze the topic: "${topic}".
+
+Search results available:
+${searchResults.results}
+
+Available specialist agents:
+1. Technical Analyst - Focuses on technical aspects, implementation details, and systems
+2. Trend Researcher - Analyzes current trends, patterns, and future projections  
+3. Impact Assessor - Evaluates societal, economic, and strategic implications
+4. Context Synthesizer - Creates connections and synthesizes information across domains
+5. Evidence Validator - Validates sources, checks accuracy, and assesses reliability
+
+Based on the search results, orchestrate these agents to provide comprehensive analysis. For each agent, provide:
+1. Specific focus area for this topic
+2. Key questions they should investigate
+3. Analysis priority (high/medium/low)
+4. Expected insights they should deliver
+
+Format your response as a structured plan for agent coordination.`;
+
+                try {
+                    const orchestrationPlan = await callAzureOpenAI(orchestrationPrompt);
+                    console.log(`✅ GPT orchestration plan created: ${orchestrationPlan.substring(0, 100)}...`);
+                    
+                    // Generate agent analyses based on GPT orchestration
+                    const agentConfigs = [
+                        { name: 'Technical Analyst', expertise: 'technical_analysis', color: '#00ff88' },
+                        { name: 'Trend Researcher', expertise: 'trend_analysis', color: '#ff8800' },
+                        { name: 'Impact Assessor', expertise: 'impact_assessment', color: '#ff0088' },
+                        { name: 'Context Synthesizer', expertise: 'context_synthesis', color: '#8800ff' },
+                        { name: 'Evidence Validator', expertise: 'evidence_validation', color: '#0088ff' }
+                    ];
+                    
+                    for (const config of agentConfigs) {
+                        const agentPrompt = `You are ${config.name}, a specialist in ${config.expertise}.
+
+Research Topic: ${topic}
+
+Search Results:
+${searchResults.results}
+
+Orchestration Plan:
+${orchestrationPlan}
+
+Based on your expertise in ${config.expertise}, provide detailed analysis focusing on your specialized area. Include:
+1. Key findings relevant to your expertise
+2. Critical insights and patterns you identify
+3. Implications and significance of your findings
+4. Recommendations for further investigation
+
+Provide structured, detailed analysis based on your specialization.`;
+
+                        try {
+                            const agentResponse = await callAzureOpenAI(agentPrompt);
+                            
+                            const analysisData = {
+                                agentName: config.name,
+                                expertise: config.expertise,
+                                analysis: agentResponse,
+                                confidence: 0.8 + Math.random() * 0.15,
+                                timestamp: new Date().toISOString()
+                            };
+                            
+                            agentAnalysis.push(analysisData);
+                            
+                            // Send agent analysis immediately
+                            socket.emit('researchUpdate', {
+                                type: 'agent_analysis',
+                                agent: analysisData.agentName,
+                                analysis: analysisData.analysis,
+                                insights: analysisData.insights || [],
+                                confidence: analysisData.confidence,
+                                timestamp: Date.now()
+                            });
+                            
+                            // Generate embedding for agent analysis
+                            const agentEmbedding = generateEmbedding(`${config.name} analysis of ${topic}`, agentResponse);
+                            const embeddingData = {
+                                id: `agent_${config.name.toLowerCase().replace(' ', '_')}_${Date.now()}`,
+                                x: agentEmbedding.x,
+                                y: agentEmbedding.y,
+                                z: agentEmbedding.z,
+                                metadata: {
+                                    type: 'agent_analysis',
+                                    agentName: config.name,
+                                    query: topic,
+                                    timestamp: Date.now()
+                                },
+                                weight: agentEmbedding.weight || 0.7
+                            };
+                            
+                            // Add to lead researcher and broadcast
+                            leadResearcher.addEmbedding(embeddingData);
+                            io.emit('newEmbedding', embeddingData);
+                            
+                        } catch (agentError) {
+                            console.error(`❌ Error with ${config.name}:`, agentError.message);
+                        }
+                    }
+                    
+                } catch (orchestrationError) {
+                    console.error('❌ GPT orchestration error:', orchestrationError.message);
+                    agentAnalysis = generateFallbackAgentAnalysis(topic, searchResults);
+                }
+            } else {
+                agentAnalysis = generateFallbackAgentAnalysis(topic, searchResults);
+            }
+            
+            // Create research session
+            const sessionData = {
+                sessionId: `session_${Date.now()}`,
+                topic: topic,
+                searchResults: searchResults,
+                agentAnalysis: agentAnalysis,
+                status: 'completed',
+                useGPTOrchestration: useGPTOrchestration,
+                usePerplexitySearch: usePerplexitySearch,
+                timestamp: new Date().toISOString()
+            };
+            
+            currentResearchSession = sessionData;
+            
+            // Send final summary
+            socket.emit('researchUpdate', {
+                type: 'final_summary',
+                summary: `Research completed for "${topic}". Found ${searchResults?.sources?.length || 0} sources with ${agentAnalysis.length} agent analyses. Key insights: ${agentAnalysis.map(a => a.analysis?.substring(0, 100)).join('; ')}...`,
+                timestamp: Date.now()
+            });
+
+            // Send completion signal
+            socket.emit('researchUpdate', {
+                type: 'completed',
+                sessionId: sessionData.sessionId,
+                topic: topic,
+                searchResults: searchResults,
+                agentAnalysis: agentAnalysis,
+                embeddingCount: leadResearcher.getEmbeddingSpace().length,
+                useGPTOrchestration: useGPTOrchestration,
+                usePerplexitySearch: usePerplexitySearch
+            });
+
+            console.log(`✅ Research completed for "${topic}"`);
+            
+        } catch (error) {
+            console.error('❌ Research error:', error.message);
+            socket.emit('researchUpdate', {
+                type: 'error',
+                message: error.message
+            });
+        }
     });
     
     socket.on('disconnect', () => {

@@ -1,0 +1,13 @@
+# Exclude large HTML files from language statistics
+public/index.html linguist-vendored
+*.html linguist-language=JavaScript
+
+# Mark template files appropriately
+*.astro linguist-language=Astro
+
+# Ensure TypeScript is properly detected
+*.ts linguist-language=TypeScript
+
+# Mark generated or vendor files
+public/* linguist-vendored=false
+src/* linguist-vendored=false

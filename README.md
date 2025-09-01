@@ -1,52 +1,88 @@
 # Multi-Agent System Visualizer
 
-A 3D visualization tool for multi-agent research systems with real-time interaction modeling.
+A sophisticated 3D visualization platform for multi-agent research systems with real-time AI-powered research capabilities.
 
 ## Features
 
-- 3D architectural visualization of multi-agent systems
-- Real-time agent interactions and task flow
-- Embedding space visualization
-- Research result export and analysis
-- WebSocket-based communication
+- **3D Agent Architecture**: Interactive visualization of specialized research agents
+- **Real-time Research**: Integration with Perplexity API and Azure OpenAI
+- **Intelligent Interactions**: Context-aware agent communication flows
+- **Embedding Space**: Dynamic visualization of research embeddings
+- **Export System**: Clean, minimal research result exports
+- **Dual Architecture**: Express server + Astro framework support
 
-## Setup
+## Quick Start
 
-1. Install dependencies:
+1. **Install dependencies**:
    ```bash
    npm install
    ```
 
-2. Start the development server:
+2. **Configure APIs**:
    ```bash
-   npm run dev
+   cp .env.template env.local
+   # Edit env.local with your API keys
    ```
 
-3. Open your browser and navigate to the displayed URL
+3. **Start the server**:
+   ```bash
+   node server.js
+   ```
+
+4. **Open your browser**: `http://localhost:4321`
 
 ## Usage
 
-1. Enter a research topic in the search field
-2. Watch the 3D visualization show agent interactions
-3. View the embedding space in the top panel
-4. Export research results using the Export button
+1. **Start Research**: Enter a topic in the search interface
+2. **Watch Visualization**: Real-time 3D agent interactions
+3. **Monitor Embeddings**: Top-right panel shows research space
+4. **Export Results**: Get clean, minimal research summaries with real API data
 
 ## Architecture
 
-The system uses multiple specialized agents:
-- Lead Orchestrator: Coordinates all research activities
-- Memory Database: Stores context and research data  
-- Tools Database: Manages API tools and resources
-- Search Agents: Perform parallel information retrieval
-- Citations Agent: Validates sources and references
-- Synthesis Agent: Analyzes and synthesizes findings
+### Specialized Research Agents
+- **Lead Orchestrator**: Coordinates all research activities
+- **Memory System**: Contextual data storage and retrieval  
+- **Tool Agent**: API management and resource coordination
+- **Search Cluster**: Parallel information retrieval (Alpha, Beta, Gamma)
+- **Citations Agent**: Source validation and reference management
+- **Synthesis Agent**: Analysis and knowledge integration
 
-## Tech Stack
+### Technology Stack
+- **Frontend**: Three.js + ES Modules for 3D visualization
+- **Backend**: Node.js + Express + Socket.io for real-time communication
+- **AI Integration**: Azure OpenAI GPT-4.1-nano + Perplexity API
+- **Framework**: Astro (for language diversity)
+- **Database**: SQLite with better-sqlite3
 
-- Three.js for 3D visualization
-- WebSocket for real-time communication
-- Node.js backend with Express
-- Astro framework integration
+## API Configuration
+
+Required API keys in `env.local`:
+- `AZURE_API_KEY`: Azure OpenAI access
+- `AZURE_ENDPOINT`: Your Azure cognitive services endpoint  
+- `PERPLEXITY_API_KEY`: Perplexity search API access
+
+## Development
+
+### Running in Development
+```bash
+# Express server (main application)
+node server.js
+
+# Or Astro dev server (alternative)
+npm run dev
+```
+
+### Project Structure
+```
+├── server.js              # Main Express server
+├── public/
+│   ├── index.html         # 3D visualization interface
+│   └── css/styles.css     # Styling
+├── src/                   # Astro components (for language stats)
+├── data/agents.db         # SQLite database
+└── env.local             # API configuration
+```
 
 ## Export Format
 
