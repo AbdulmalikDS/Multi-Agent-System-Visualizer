@@ -4,15 +4,9 @@ A sophisticated 3D visualization platform for multi-agent research systems with 
 
 ## 🎬 Demo Video
 
-https://github.com/AbdulmalikDS/Multi-Agent-System-Visualizer/assets/your-username/Demo.mp4
+https://github.com/AbdulmalikDS/Multi-Agent-System-Visualizer/Demo.mp4
 
 *Watch the multi-agent system in action: 3D visualization, real-time research, and intelligent agent interactions*
-
----
-
-**🎮 Try it live**: [Live Demo](https://your-app-name.up.railway.app) - Works in demo mode without API keys!
-
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template)
 
 ## Features
 
