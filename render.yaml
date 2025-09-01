@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: multi-agent-visualizer
+    env: node
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        fromService:
+          type: web
+          name: multi-agent-visualizer
+          property: port
+    disk:
+      name: data
+      mountPath: /app/data
+      sizeGB: 1

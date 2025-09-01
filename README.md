@@ -2,6 +2,10 @@
 
 A sophisticated 3D visualization platform for multi-agent research systems with real-time AI-powered research capabilities.
 
+**🎮 Try it live**: [Live Demo](https://your-app-name.up.railway.app) - Works in demo mode without API keys!
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template)
+
 ## Features
 
 - **3D Agent Architecture**: Interactive visualization of specialized research agents
@@ -12,6 +16,13 @@ A sophisticated 3D visualization platform for multi-agent research systems with 
 - **Dual Architecture**: Express server + Astro framework support
 
 ## Quick Start
+
+### 🚀 Instant Deploy (No setup required)
+- **Railway**: [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template)
+- **Render**: [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
+- **Demo Mode**: Works immediately without API keys!
+
+### 💻 Local Development
 
 1. **Install dependencies**:
    ```bash

@@ -655,7 +655,7 @@
 
                     // Listen for research updates and populate research results
                     socket.on('researchUpdate', (data) => {
-                        console.log('🔍 Research update received:', data);
+                        console.log('🔬 Research update received:', data);
                         
                         switch (data.type) {
                             case 'perplexity_result':
@@ -665,9 +665,22 @@
                                     results: data.results,
                                     sources: data.sources || [],
                                     links: data.links || [],
-                                    timestamp: data.timestamp
+                                    timestamp: data.timestamp,
+                                    isDemo: data.isDemo || false
                                 });
                                 console.log('📊 Added Perplexity results to researchResults');
+                                
+                                // Show demo mode indicator if applicable
+                                if (data.isDemo) {
+                                    const status = document.getElementById('researchStatus');
+                                    if (status) {
+                                        status.innerHTML = `
+                                            <div style="color: #ffaa00; padding: 6px; font-size: 9px; opacity: 0.8;">
+                                                🎮 Demo Mode - Real results need API keys
+                                            </div>
+                                        `;
+                                    }
+                                }
                                 break;
                             case 'agent_analysis':
                                 if (!researchResults.agentAnalysis) researchResults.agentAnalysis = [];
@@ -1302,19 +1315,6 @@
             };
             
             // Memory storage flows
-            if (targetType === 'database') return {
-                type: 'Knowledge Storage',
-                color: 0x6644aa,
-                speed: 0.02,
-                intensity: 0.3
-            };
-            
-            // Memory retrieval flows
-            if (sourceType === 'database') return {
-                type: 'Context Loading',
-                color: 0xaa88ff,
-                speed: 0.04,
-                intensity: 0.4
             };
             
             // Inter-search collaboration

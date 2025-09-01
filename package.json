@@ -8,7 +8,10 @@
     "start": "node server.js",
     "build": "echo 'No build step needed for Express server'",
     "preview": "node server.js",
-    "astro": "astro"
+    "astro": "astro",
+    "deploy:railway": "railway login && railway up",
+    "deploy:render": "echo 'Push to GitHub and connect to Render'",
+    "deploy:heroku": "git push heroku main"
   },
   "dependencies": {
     "@azure/core-sse": "^2.1.1",
