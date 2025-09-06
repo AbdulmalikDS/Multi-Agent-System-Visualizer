@@ -67,13 +67,6 @@ https://github.com/user-attachments/assets/97b4abfb-bbf2-4177-bbd0-552cef2dfa69
 - **Framework**: Astro (for language diversity)
 - **Database**: SQLite with better-sqlite3
 
-## API Configuration
-
-Required API keys in `env.local`:
-- `AZURE_API_KEY`: Azure OpenAI access
-- `AZURE_ENDPOINT`: Your Azure cognitive services endpoint  
-- `PERPLEXITY_API_KEY`: Perplexity search API access
-
 ## Development
 
 ### Running in Development
